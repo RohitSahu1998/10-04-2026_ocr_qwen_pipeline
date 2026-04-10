@@ -110,17 +110,48 @@ class QwenExtractor:
     # CPT VALIDATION
     # ============================================================
     def is_valid_cpt(self, code):
-        """Return True/False (JSON safe)"""
-
+        """
+        Validates CPT code according to specific medical category ranges.
+        Category I: Numerical ranges (E/M, Surgery, etc.)
+        Category II: Ends in 'F'
+        Category III: Ends in 'T'
+        """
         if not code:
             return False
+            
+        code_str = str(code).strip().upper()
 
-        return bool(
-            re.match(r"^\d{5}$", code) or
-            re.match(r"^\d{4}F$", code) or
-            re.match(r"^\d{4}T$", code) or
-            re.match(r"^[A-Z]\d{4}$", code)
-        )
+        # Category II (Performance Management)
+        if re.match(r"^\d{4}F$", code_str):
+            return True
+
+        # Category III (Experimental Technology)
+        if re.match(r"^\d{4}T$", code_str):
+            return True
+
+        # HCPCS (Standard Letter + 4 Digits)
+        if re.match(r"^[A-Z]\d{4}$", code_str):
+            return True
+
+        # Category I (Numerical 5-digit)
+        if re.match(r"^\d{5}$", code_str):
+            try:
+                val = int(code_str)
+                # Apply specific medical category ranges
+                is_valid = (
+                    (99202 <= val <= 99499) or  # E/M
+                    (100 <= val <= 1999) or     # Anesthesia
+                    (99100 <= val <= 99150) or  # Anesthesia (add-on)
+                    (10004 <= val <= 69990) or  # Surgery
+                    (70010 <= val <= 79999) or  # Radiology
+                    (80047 <= val <= 89398) or  # Pathology & Lab
+                    (90281 <= val <= 99607)     # Medicine
+                )
+                return is_valid
+            except ValueError:
+                return False
+
+        return False
 
     # ============================================================
     # AMOUNT VALIDATION
