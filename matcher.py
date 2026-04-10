@@ -167,27 +167,12 @@ def get_match_weight(ocr_text, qwen_text):
             
     return False, 0
 
-def match_single_page(qwen_page_dict, ocr_page_list, img_width=None, img_height=None):
+def match_single_page(qwen_page_dict, ocr_page_list):
     """
-    Matches Qwen extracted items to OCR boxes using Zone-Based Filtering.
-    If img_width/height are provided, it uses AI coordinates to restrict the search zone.
+    Matches Qwen extracted items to OCR boxes.
+    IMPORTANT: Deep-copies the OCR list so the original data is not mutated.
     """
     qwen_items = extract_qwen_items(qwen_page_dict)
-    
-    # Scale Qwen Coordinates [ymin, xmin, ymax, xmax] from 1000-scale to Pixels
-    if img_width and img_height:
-        for q in qwen_items:
-            if q.get('qwen_bbox') and len(q['qwen_bbox']) == 4:
-                ymin, xmin, ymax, xmax = q['qwen_bbox']
-                # Store as [x_min, y_min, x_max, y_max] in pixels
-                q['zone_px'] = [
-                    (xmin / 1000.0) * img_width,
-                    (ymin / 1000.0) * img_height,
-                    (xmax / 1000.0) * img_width,
-                    (ymax / 1000.0) * img_height
-                ]
-            else:
-                q['zone_px'] = None
     
     # Deep copy to avoid mutating the original OCR data
     ocr_working = copy.deepcopy(ocr_page_list)
@@ -198,22 +183,9 @@ def match_single_page(qwen_page_dict, ocr_page_list, img_width=None, img_height=
         box['candidates'] = []
         
     for box in ocr_working:
-        b_center = get_center(box['bbox'])
         for q in qwen_items:
             matched, weight = get_match_weight(box.get('text', ''), q['value'])
-            
-            # ZONE FILTERING: If AI provided a location, prioritize it
-            if matched and q.get('zone_px'):
-                z = q['zone_px']
-                # Increase weight if box is inside or near the AI's predicted zone
-                is_inside = (z[0]-50 <= b_center[0] <= z[2]+50) and (z[1]-50 <= b_center[1] <= z[3]+50)
-                if is_inside:
-                    weight += 5 # Massive boost for being in the right place
-                else:
-                    # If it matches text but is far away, penalize heavily
-                    weight -= 4 
-
-            if matched and weight > 0:
+            if matched:
                 box['candidates_raw'].append((q, weight))
                 
         if box['candidates_raw']:
@@ -325,15 +297,14 @@ def highlight_and_save_pdf(input_document_path, qwen_full_data, ocr_full_data, o
     
     for page_index, pil_img in enumerate(pil_images):
         page_num = page_index + 1
-        w_img, h_img = pil_img.size
-        print(f"\n--- Processing Page {page_num} ({w_img}x{h_img}) ---")
+        print(f"\n--- Processing Page {page_num} ---")
         
         qwen_page_dict = qwen_full_data.get(f"page_{page_num}", qwen_full_data) 
         ocr_page_list = [box for box in ocr_full_data if box.get('page') == page_num]
         
         if not ocr_page_list: ocr_page_list = ocr_full_data 
             
-        matched_results = match_single_page(qwen_page_dict, ocr_page_list, img_width=w_img, img_height=h_img)
+        matched_results = match_single_page(qwen_page_dict, ocr_page_list)
         
         for res in matched_results:
             res['page'] = page_num
