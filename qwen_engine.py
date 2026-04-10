@@ -52,7 +52,7 @@ class QwenExtractor:
 
         print("✅ Qwen Model loaded successfully")
 
-        # Prompt - Updated to request grounding
+        # Prompt
         self.prompt = """
         You are a highly accurate OCR data extraction system.
 
@@ -61,24 +61,22 @@ class QwenExtractor:
         2. CPT codes must be code only (no description).
         3. Charges must be numeric values only.
         4. Return ONLY valid JSON.
-        5. IMPORTANT: For every field, provide the visual coordinates using the <|box_2d|> tag.
-           Format: {"value": "text", "bbox": [ymin, xmin, ymax, xmax]}
 
         {
-          "claimant_name": {"value": "", "bbox": []},
-          "claimant_number": {"value": "", "bbox": []},
-          "tax_id": {"value": "", "bbox": []},
-          "practice_address": {"value": "", "bbox": []},
-          "billing_address": {"value": "", "bbox": []},
-          "diagnosis_codes": [{"value": "", "bbox": []}],
-          "date_of_service": {"value": "", "bbox": []},
-          "cpt_codes": [{"value": "", "bbox": []}],
-          "charges": [{"value": "", "bbox": []}],
-          "units": [{"value": "", "bbox": []}],
-          "invoice_date": {"value": "", "bbox": []},
-          "invoice_number": {"value": "", "bbox": []},
-          "taxonomy": {"value": "", "bbox": []},
-          "total_amount": {"value": "", "bbox": []}
+          "claimant_name": "",
+          "claimant_number": "",
+          "tax_id": "",
+          "practice_address": "",
+          "billing_address": "",
+          "diagnosis_codes": [],
+          "date_of_service": "",
+          "cpt_codes": [],
+          "charges": [],
+          "units": [],
+          "invoice_date": "",
+          "invoice_number": "",
+          "taxonomy": "",
+          "total_amount": ""
         }
         """
 
@@ -266,16 +264,10 @@ class QwenExtractor:
 
             result_text, token_data = self.extract_with_logprobs(image)
 
-            # Clean and parse JSON
             cleaned = result_text.replace("```json", "").replace("```", "").strip()
-            
-            # Use regex to find and normalize any <|box_2d|> tags outside/inside JSON if needed
-            # For Qwen 2.5, we expect it inside the strings or values.
-            # This step ensures the JSON is valid even if grounding tags are present.
-            json_safe = re.sub(r'<\|box_2d\|>\((.*?)\)', r'[\1]', cleaned)
 
             try:
-                data = json.loads(json_safe)
+                data = json.loads(cleaned)
             except:
                 final_output[f"page_{i+1}"] = {"raw_output": cleaned}
                 continue
