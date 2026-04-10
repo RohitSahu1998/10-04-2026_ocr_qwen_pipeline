@@ -84,8 +84,11 @@ class QwenExtractor:
     # CPT CLEANING
     # ============================================================
     def extract_cpt_code(self, text):
-        """Extract clean CPT/HCPCS code from noisy string"""
-        text = str(text).strip()
+        """Extract clean CPT/HCPCS code or return raw if no pattern matches."""
+        if not text:
+            return None
+        
+        text_str = str(text).strip()
 
         patterns = [
             r"\b\d{5}\b",        # Category I
@@ -95,11 +98,13 @@ class QwenExtractor:
         ]
 
         for pattern in patterns:
-            match = re.search(pattern, text)
+            match = re.search(pattern, text_str)
             if match:
                 return match.group()
 
-        return None
+        # FALLBACK: If no standard code found, return the raw text 
+        # instead of None to prevent data loss.
+        return text_str
 
     # ============================================================
     # CPT VALIDATION
@@ -121,9 +126,14 @@ class QwenExtractor:
     # AMOUNT VALIDATION
     # ============================================================
     def is_valid_amount(self, value):
-        """Check if value is numeric"""
+        """Check if value is numeric, allowing for common currency symbols."""
+        if not value:
+            return False
+            
         try:
-            float(str(value).replace(",", "").strip())
+            # Strip common currency symbols and commas
+            clean = str(value).replace(",", "").replace("$", "").replace("£", "").replace("€", "").strip()
+            float(clean)
             return True
         except:
             return False
@@ -286,46 +296,30 @@ class QwenExtractor:
                         # CPT FIX
                         if key == "cpt_codes":
                             extracted = self.extract_cpt_code(v)
+                            conf = self.compute_field_confidence(extracted or v, token_data)
 
-                            if extracted:
-                                conf = self.compute_field_confidence(extracted, token_data)
-
-                                item = {
-                                    "value": extracted,
-                                    "raw_text": v,
-                                    "confidence": conf,
-                                    "valid": self.is_valid_cpt(extracted),
-                                    "review_required": conf < 0.80
-                                }
-                            else:
-                                item = {
-                                    "value": None,
-                                    "raw_text": v,
-                                    "confidence": 0.0,
-                                    "valid": False,
-                                    "review_required": True
-                                }
-
+                            item = {
+                                "value": extracted if extracted else v,
+                                "raw_text": v,
+                                "confidence": conf,
+                                "valid": self.is_valid_cpt(extracted),
+                                "review_required": conf < 0.80 or not self.is_valid_cpt(extracted)
+                            }
+                            
                             field_list.append(item)
                             continue
 
                         # CHARGES FIX
                         if key == "charges":
-                            if not self.is_valid_amount(v):
-                                item = {
-                                    "value": v,
-                                    "confidence": 0.0,
-                                    "valid": False,
-                                    "review_required": True
-                                }
-                            else:
-                                conf = self.compute_field_confidence(v, token_data)
-                                item = {
-                                    "value": v,
-                                    "confidence": conf,
-                                    "valid": True,
-                                    "review_required": conf < 0.80
-                                }
+                            valid = self.is_valid_amount(v)
+                            conf = self.compute_field_confidence(v, token_data)
+                            
+                            item = {
+                                "value": v,
+                                "confidence": conf,
+                                "valid": valid,
+                                "review_required": conf < 0.80 or not valid
+                            }
 
                             field_list.append(item)
                             continue
