@@ -98,19 +98,19 @@ def extract_qwen_items(data, path=""):
     
     # CASE: Dictionary with "value" (The new structured format)
     if isinstance(data, dict) and "value" in data:
-        val = str(data["value"]).strip()
-        # Handle AI confidence (try both 'confidence' and 'ai_confidence' keys)
+        val = str(data.get("value", "")).strip()
         conf = data.get("confidence", data.get("ai_confidence", 0.0))
         
-        if val and val.lower() not in ["none", "-", "null", ""]:
-            results.append({
-                "field": path, 
-                "value": val, 
-                "clean": clean_alphanumeric(val), 
-                "claimed_boxes": [],
-                "qwen_bbox": data.get("bbox"),
-                "ai_confidence": float(conf)
-            })
+        # We allow almost all values now, even empty ones, so the user can see 
+        # that the field was found but perhaps is empty.
+        results.append({
+            "field": path, 
+            "value": val, 
+            "clean": clean_alphanumeric(val), 
+            "claimed_boxes": [],
+            "qwen_bbox": data.get("bbox"),
+            "ai_confidence": float(conf)
+        })
         return results
 
     # CASE: Standard Dictionary (recursive search)
